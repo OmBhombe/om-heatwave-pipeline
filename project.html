@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battery Health Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F1416; --panel:#161D20; --line:#25302F;
+    --text:#E7EDE9; --dim:#8FA39B; --volt:#8CFF7A;
+    --amber:#FFB454; --red:#FF6B6B; --deep:#1D3B34;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; margin:0; padding:40px 6vw;}
+  h1{font-family:'Space Grotesk'; font-size:1.8rem; margin:0 0 6px;}
+  .sub{color:var(--dim); font-size:0.9rem; margin-bottom:32px;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+
+  .top{display:grid; grid-template-columns:1.1fr 0.9fr; gap:24px; align-items:start;}
+  @media(max-width:800px){.top{grid-template-columns:1fr;}}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px;}
+  .panel h2{font-family:'Space Grotesk'; font-size:1.05rem; margin-bottom:16px;}
+
+  label{display:block; font-size:0.85rem; color:var(--text); margin-bottom:6px; font-family:'Inter'; font-weight:500;}
+  label .once{color:var(--dim); font-weight:400; font-size:0.78rem;}
+  input{
+    width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text);
+    padding:9px 10px; border-radius:6px; font-family:'Inter'; font-size:0.92rem; margin-bottom:14px;
+  }
+  input:focus{outline:1px solid var(--volt);}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  button{
+    background:var(--volt); color:#0F1416; border:none; padding:11px 18px; border-radius:6px;
+    font-weight:600; font-size:0.9rem; cursor:pointer; width:100%;
+  }
+  button:hover{opacity:0.9;}
+  button.ghost{background:transparent; border:1px solid var(--line); color:var(--dim); margin-top:8px;}
+
+  .health-display{text-align:center; padding:20px 0;}
+  .health-num{font-family:'Space Grotesk'; font-size:3.4rem; font-weight:700; color:var(--volt);}
+  .health-num.warn{color:var(--amber);}
+  .health-num.bad{color:var(--red);}
+  .health-label{color:var(--dim); font-family:'IBM Plex Mono'; font-size:0.8rem; margin-top:-6px;}
+
+  .stat-mini{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:0.88rem;}
+  .stat-mini:last-child{border-bottom:none;}
+  .stat-mini span{color:var(--dim);}
+  .stat-mini b{font-family:'IBM Plex Mono'; color:var(--text);}
+
+  .chart-wrap{margin-top:28px;}
+  table{width:100%; border-collapse:collapse; margin-top:10px;}
+  th,td{text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:0.85rem;}
+  th{color:var(--dim); font-family:'IBM Plex Mono'; font-weight:400; font-size:0.72rem; text-transform:uppercase;}
+  td.num{font-family:'IBM Plex Mono'; color:var(--volt);}
+  td.del{cursor:pointer; color:var(--dim); text-align:right;}
+  td.del:hover{color:var(--red);}
+
+  .empty{color:var(--dim); font-size:0.88rem; padding:20px 0; text-align:center;}
+  .status{font-size:0.78rem; color:var(--dim); margin-top:6px; font-family:'IBM Plex Mono'; min-height:16px;}
+</style>
+</head>
+<body>
+
+<h1>Battery Health Tracker</h1>
+<div class="sub">Log your max range at full charge over time. Watch degradation before it surprises you.</div>
+
+<div class="top">
+  <div class="panel">
+    <h2>Log a reading</h2>
+    <div id="baselineFields">
+      <label>Range when new, full charge (km) <span class="once">— set once</span></label>
+      <input type="number" id="baselineRange" placeholder="450">
+    </div>
+    <div class="row2">
+      <div>
+        <label>Reading date</label>
+        <input type="date" id="entryDate">
+      </div>
+      <div>
+        <label>Odometer (km)</label>
+        <input type="number" id="entryOdo" placeholder="18500">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>Range now, full charge (km)</label>
+        <input type="number" id="entryRange" placeholder="410">
+      </div>
+      <div>
+        <label>Outside temp (°C)</label>
+        <input type="number" id="entryTemp" placeholder="25">
+      </div>
+    </div>
+    <button id="addBtn">Add reading</button>
+    <button class="ghost" id="resetBtn">Reset all data</button>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Current health</h2>
+    <div class="health-display">
+      <div class="health-num" id="healthNum">—</div>
+      <div class="health-label">ESTIMATED CAPACITY REMAINING</div>
+    </div>
+    <div class="stat-mini"><span>Baseline range</span><b id="statBaseline">—</b></div>
+    <div class="stat-mini"><span>Latest range</span><b id="statLatest">—</b></div>
+    <div class="stat-mini"><span>Range lost</span><b id="statLost">—</b></div>
+    <div class="stat-mini"><span>Readings logged</span><b id="statCount">—</b></div>
+  </div>
+</div>
+
+<div class="panel chart-wrap">
+  <h2>Degradation over time</h2>
+  <svg id="chart" viewBox="0 0 800 260" style="width:100%; height:260px;"></svg>
+  <table id="entryTable">
+    <thead>
+      <tr><th>Date</th><th>Odometer</th><th>Range</th><th>Health %</th><th></th></tr>
+    </thead>
+    <tbody id="entryBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg" style="display:none;">No readings yet. Add one above to get started.</div>
+</div>
+
+<script>
+const STORAGE_KEY = 'battery-tracker-data';
+let data = { baseline: null, entries: [] };
+
+function setStatus(msg, isErr){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.color = isErr ? 'var(--red)' : 'var(--dim)';
+}
+
+async function loadData(){
+  setStatus('Loading...');
+  try{
+    const result = await window.storage.get(STORAGE_KEY, false);
+    if(result && result.value){
+      data = JSON.parse(result.value);
+    }
+    setStatus('');
+  }catch(e){
+    // no data yet, that's fine
+    data = { baseline: null, entries: [] };
+    setStatus('');
+  }
+  render();
+}
+
+async function saveData(){
+  try{
+    const result = await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+    if(!result){ setStatus('Save failed, try again.', true); }
+  }catch(e){
+    setStatus('Save error: ' + e.message, true);
+  }
+}
+
+function healthColor(pct){
+  if(pct >= 90) return '';
+  if(pct >= 80) return 'warn';
+  return 'bad';
+}
+
+function render(){
+  // baseline field
+  const baselineInput = document.getElementById('baselineRange');
+  if(data.baseline){
+    baselineInput.value = data.baseline.range;
+    baselineInput.disabled = true;
+  } else {
+    baselineInput.disabled = false;
+  }
+
+  const entries = [...data.entries].sort((a,b)=> new Date(a.date) - new Date(b.date));
+  const latest = entries[entries.length - 1];
+
+  const healthNum = document.getElementById('healthNum');
+  if(data.baseline && latest){
+    const pct = (latest.range / data.baseline.range) * 100;
+    healthNum.textContent = pct.toFixed(1) + '%';
+    healthNum.className = 'health-num ' + healthColor(pct);
+    document.getElementById('statBaseline').textContent = data.baseline.range + ' km';
+    document.getElementById('statLatest').textContent = latest.range + ' km';
+    document.getElementById('statLost').textContent = (data.baseline.range - latest.range) + ' km';
+  } else {
+    healthNum.textContent = '—';
+    healthNum.className = 'health-num';
+    document.getElementById('statBaseline').textContent = data.baseline ? data.baseline.range + ' km' : '—';
+    document.getElementById('statLatest').textContent = '—';
+    document.getElementById('statLost').textContent = '—';
+  }
+  document.getElementById('statCount').textContent = entries.length;
+
+  // table
+  const body = document.getElementById('entryBody');
+  body.innerHTML = '';
+  document.getElementById('emptyMsg').style.display = entries.length ? 'none' : 'block';
+  entries.slice().reverse().forEach(en=>{
+    const pct = data.baseline ? ((en.range / data.baseline.range) * 100).toFixed(1) : '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${en.date}</td><td class="num">${en.odo ?? '—'} km</td><td class="num">${en.range} km</td><td class="num">${pct}${pct !== '—' ? '%' : ''}</td><td class="del" data-id="${en.id}">remove</td>`;
+    body.appendChild(tr);
+  });
+  body.querySelectorAll('.del').forEach(td=>{
+    td.addEventListener('click', async ()=>{
+      data.entries = data.entries.filter(e=> e.id !== td.dataset.id);
+      await saveData();
+      render();
+    });
+  });
+
+  drawChart(entries);
+}
+
+function drawChart(entries){
+  const svg = document.getElementById('chart');
+  svg.innerHTML = '';
+  if(!data.baseline || entries.length === 0){
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', 400); t.setAttribute('y', 130); t.setAttribute('text-anchor','middle');
+    t.setAttribute('fill', '#8FA39B'); t.setAttribute('font-family','IBM Plex Mono'); t.setAttribute('font-size','13');
+    t.textContent = 'Add a baseline and at least one reading to see the trend';
+    svg.appendChild(t);
+    return;
+  }
+
+  const W = 800, H = 260, padL = 50, padR = 20, padT = 20, padB = 40;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const dates = entries.map(e=> new Date(e.date).getTime());
+  const minDate = Math.min(...dates), maxDate = Math.max(...dates);
+  const dateRange = maxDate - minDate || 1;
+
+  const minPct = 70, maxPct = 100;
+
+  function xFor(d){ return padL + ((d - minDate) / dateRange) * plotW; }
+  function yFor(pct){ return padT + (1 - (pct - minPct)/(maxPct - minPct)) * plotH; }
+
+  // gridlines
+  [70,80,90,100].forEach(pct=>{
+    const y = yFor(pct);
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('stroke', '#25302F'); line.setAttribute('stroke-width', '1');
+    svg.appendChild(line);
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', padL - 10); label.setAttribute('y', y + 4);
+    label.setAttribute('text-anchor', 'end'); label.setAttribute('fill', '#8FA39B');
+    label.setAttribute('font-family','IBM Plex Mono'); label.setAttribute('font-size','11');
+    label.textContent = pct + '%';
+    svg.appendChild(label);
+  });
+
+  // line + points
+  let pathD = '';
+  entries.forEach((en, i)=>{
+    const pct = (en.range / data.baseline.range) * 100;
+    const x = xFor(new Date(en.date).getTime());
+    const y = yFor(Math.max(minPct, Math.min(maxPct, pct)));
+    pathD += (i === 0 ? 'M' : 'L') + x + ',' + y + ' ';
+  });
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d', pathD);
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', '#8CFF7A');
+  path.setAttribute('stroke-width', '2.5');
+  svg.appendChild(path);
+
+  entries.forEach(en=>{
+    const pct = (en.range / data.baseline.range) * 100;
+    const x = xFor(new Date(en.date).getTime());
+    const y = yFor(Math.max(minPct, Math.min(maxPct, pct)));
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', x); circle.setAttribute('cy', y); circle.setAttribute('r', 4);
+    circle.setAttribute('fill', '#0F1416'); circle.setAttribute('stroke', '#8CFF7A'); circle.setAttribute('stroke-width','2');
+    svg.appendChild(circle);
+  });
+}
+
+document.getElementById('addBtn').addEventListener('click', async ()=>{
+  const baselineVal = parseFloat(document.getElementById('baselineRange').value);
+  const date = document.getElementById('entryDate').value;
+  const odo = parseFloat(document.getElementById('entryOdo').value);
+  const range = parseFloat(document.getElementById('entryRange').value);
+  const temp = document.getElementById('entryTemp').value;
+
+  if(!data.baseline){
+    if(!baselineVal || baselineVal <= 0){
+      setStatus('Enter a rated range when new first.', true);
+      return;
+    }
+    data.baseline = { range: baselineVal, date: date || new Date().toISOString().slice(0,10) };
+  }
+  if(!date || !range || range <= 0){
+    setStatus('Date and current max range are required.', true);
+    return;
+  }
+
+  data.entries.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    date, odo: odo || null, range,
+    temp: temp ? parseFloat(temp) : null
+  });
+
+  await saveData();
+  document.getElementById('entryDate').value = '';
+  document.getElementById('entryOdo').value = '';
+  document.getElementById('entryRange').value = '';
+  document.getElementById('entryTemp').value = '';
+  setStatus('Reading saved.');
+  render();
+});
+
+document.getElementById('resetBtn').addEventListener('click', async ()=>{
+  if(!confirm('Delete all logged readings and baseline?')) return;
+  data = { baseline: null, entries: [] };
+  try{
+    await window.storage.delete(STORAGE_KEY, false);
+  }catch(e){ /* ignore if not present */ }
+  render();
+  setStatus('All data cleared.');
+});
+
+loadData();
+</script>
+</body>
+</html>
