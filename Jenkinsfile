@@ -2,9 +2,11 @@ pipeline {
     agent any
 
     stages {
+
         stage('Checkout') {
             steps {
-                git 'https://github.com/OmBhombe/om-heatwave-pipeline.git'
+                git branch: 'main',
+                    url: 'https://github.com/OmBhombe/om-heatwave-pipeline.git'
             }
         }
 
@@ -20,6 +22,7 @@ pipeline {
                 sh 'python3 -m unittest discover'
             }
         }
+
     }
 
     post {
